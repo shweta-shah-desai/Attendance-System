@@ -1,0 +1,52 @@
+{
+  "name": "gharsaathi-plus",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "fix-deps": "expo install --fix",
+    "check": "node scripts/check-imports.mjs && node scripts/check-exports.mjs && node scripts/check-sql.mjs"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@hookform/resolvers": "^3.10.0",
+    "@react-navigation/bottom-tabs": "^7.3.10",
+    "@react-navigation/native": "^7.1.6",
+    "dayjs": "^1.11.13",
+    "expo": "^57.0.0",
+    "expo-constants": "~57.0.19",
+    "expo-font": "~57.0.4",
+    "expo-linking": "~57.0.11",
+    "expo-notifications": "~57.0.21",
+    "expo-print": "~57.0.2",
+    "expo-router": "~57.0.23",
+    "expo-secure-store": "~57.0.4",
+    "expo-sharing": "~57.0.22",
+    "expo-splash-screen": "~57.0.9",
+    "expo-sqlite": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.54.2",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-gifted-charts": "^1.4.54",
+    "react-native-paper": "^5.12.5",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "~0.21.0",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "babel-preset-expo": "~57.0.0",
+    "typescript": "~6.0.3"
+  }
+}

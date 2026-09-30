@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "GharSaathi+",
+    "slug": "gharsaathi-plus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "scheme": "gharsaathi",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F9FC",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gharsaathi.plus"
+    },
+    "android": {
+      "package": "com.gharsaathi.plus",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#1F4E79"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-mark.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1F4E79",
+          "imageWidth": 168
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1F4E79"
+        }
+      ],
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dba5fb2a-47f7-4299-8341-2787b3479c3f"
+      }
+    }
+  }
+}
