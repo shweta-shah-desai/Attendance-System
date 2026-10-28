@@ -39,7 +39,7 @@ export async function loadSession(): Promise<Session | null> {
     const raw = await store.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Session;
-    return typeof parsed?.userId === 'number' ? parsed : null;
+    return typeof parsed?.userId === 'string' ? parsed : null;
   } catch {
     // A corrupt session should never block the splash screen.
     return null;

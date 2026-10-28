@@ -17,9 +17,9 @@ interface Result {
 
 /**
  * Saathi rows belonging to the signed-in user. Every list in the app is scoped
- * by created_by, so one household never sees another household's Saathi.
+ * by owner_id, so one household never sees another household's Saathi.
  */
-export function useEmployees(filter: Omit<EmployeeFilter, 'createdBy'> = {}): Result {
+export function useEmployees(filter: Omit<EmployeeFilter, 'ownerId'> = {}): Result {
   const userId = useCurrentUserId();
   const { status = 'all', search, sort = 'name_asc' } = filter;
 
@@ -31,7 +31,7 @@ export function useEmployees(filter: Omit<EmployeeFilter, 'createdBy'> = {}): Re
     setLoading(true);
     setError(null);
     try {
-      setEmployees(await listEmployees({ createdBy: userId, status, search, sort }));
+      setEmployees(await listEmployees({ ownerId: userId, status, search, sort }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your Saathi list');
     } finally {
@@ -52,13 +52,13 @@ export function useWorkingSaathi(): Result {
 }
 
 /** One Saathi, for the detail screen reached from the All Saathi eye icon. */
-export function useEmployeeDetail(id: number | null) {
+export function useEmployeeDetail(id: string | null) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (id == null || Number.isNaN(id)) {
+    if (!id) {
       setEmployee(null);
       setError('This Saathi could not be found');
       setLoading(false);

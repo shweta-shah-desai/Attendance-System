@@ -102,10 +102,7 @@ const timeOptional = z
 /** Manual attendance entry form. */
 export const attendanceSchema = z
   .object({
-    emp_id: z.coerce
-      .number({ invalid_type_error: 'Choose a Saathi' })
-      .int()
-      .positive('Choose a Saathi'),
+    emp_id: z.string().uuid('Choose a Saathi'),
     date: z
       .string()
       .min(1, 'Choose a date')
@@ -149,10 +146,7 @@ export const hajariSchema = z.object({
     .trim()
     .min(1, 'Enter the Saathi name')
     .max(50, 'Name can be at most 50 characters'),
-  emp_id: z
-    .string()
-    .trim()
-    .regex(/^[1-9]\d*$/, 'Pick the Saathi from the suggestion list'),
+  emp_id: z.string().trim().uuid('Pick the Saathi from the suggestion list'),
   status: z.enum(HAJARI_STATUSES, { errorMap: () => ({ message: 'Choose Present or Absent' }) }),
   remarks: z
     .string()
@@ -187,10 +181,7 @@ export const autoHajariSchema = z
       .trim()
       .min(1, 'Enter the Saathi name')
       .max(50, 'Name can be at most 50 characters'),
-    emp_id: z
-      .string()
-      .trim()
-      .regex(/^[1-9]\d*$/, 'Pick the Saathi from the suggestion list'),
+    emp_id: z.string().trim().uuid('Pick the Saathi from the suggestion list'),
     period: z.enum(AUTO_PERIODS, { errorMap: () => ({ message: 'Choose a period' }) }),
     from: uiDateRequired,
     to: uiDateRequired,

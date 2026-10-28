@@ -69,7 +69,7 @@ export function useOverview(date: string = today(), month: string = currentMonth
  * The Hajari form uses it to say "this day is already marked as X" before the
  * user saves, because saving updates that row instead of adding a second one.
  */
-export function useExistingEntry(empId: number | null, date: string | null) {
+export function useExistingEntry(empId: string | null, date: string | null) {
   const [entry, setEntry] = useState<Attendance | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -118,7 +118,7 @@ export function useAttendanceRange(from: string | null, to: string | null) {
     setLoading(true);
     setError(null);
     try {
-      setEntries(await listAttendanceRange({ from, to, createdBy: userId }));
+      setEntries(await listAttendanceRange({ from, to, ownerId: userId }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the attendance list');
     } finally {
@@ -141,13 +141,13 @@ export function useAttendanceRange(from: string | null, to: string | null) {
  * been deleted on another screen and saying so is more useful than a blank
  * form.
  */
-export function useAttendanceDetail(id: number | null) {
+export function useAttendanceDetail(id: string | null) {
   const [entry, setEntry] = useState<AttendanceWithEmployee | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (id == null || Number.isNaN(id)) {
+    if (!id) {
       setEntry(null);
       setError('This attendance entry could not be found');
       setLoading(false);

@@ -1,8 +1,9 @@
+import { randomUUID } from 'expo-crypto';
 import { getDb } from '../client';
 import type { Employee, NewEmployee } from '../../types/attendance';
 
 export interface EmployeeFilter {
-  createdBy?: number | null;
+  ownerId?: string | null;
   status?: 'active' | 'inactive' | 'all';
   search?: string;
   sort?: 'name_asc' | 'name_desc' | 'wage_desc' | 'wage_asc' | 'recent';
@@ -16,16 +17,23 @@ const ORDER_BY: Record<NonNullable<EmployeeFilter['sort']>, string> = {
   recent: 'datetime(created_at) DESC',
 };
 
+/**
+ * Since v2 a delete only stamps `deleted_at`, so every read has to exclude
+ * those rows or a removed Saathi reappears in a list, a dropdown or a wage
+ * report. This constant is the single place that clause is spelled.
+ */
+const LIVE = 'deleted_at IS NULL';
+
 export async function listEmployees(filter: EmployeeFilter = {}): Promise<Employee[]> {
   const db = await getDb();
-  const { createdBy, status = 'all', search, sort = 'name_asc' } = filter;
+  const { ownerId, status = 'all', search, sort = 'name_asc' } = filter;
 
-  const where: string[] = [];
+  const where: string[] = [LIVE];
   const args: (string | number)[] = [];
 
-  if (createdBy != null) {
-    where.push('created_by = ?');
-    args.push(createdBy);
+  if (ownerId != null) {
+    where.push('owner_id = ?');
+    args.push(ownerId);
   }
   if (status !== 'all') {
     where.push('status = ?');
@@ -36,25 +44,23 @@ export async function listEmployees(filter: EmployeeFilter = {}): Promise<Employ
     args.push(`%${search.trim()}%`);
   }
 
-  const sql = `SELECT * FROM employees${
-    where.length ? ` WHERE ${where.join(' AND ')}` : ''
-  } ORDER BY ${ORDER_BY[sort]}`;
+  const sql = `SELECT * FROM employees WHERE ${where.join(' AND ')} ORDER BY ${ORDER_BY[sort]}`;
 
   return db.getAllAsync<Employee>(sql, ...args);
 }
 
 /** Saathis that can be marked on a given date (active, and within their tenure). */
 export async function listWorkingEmployees(
-  createdBy?: number | null,
+  ownerId?: string | null,
   onDate?: string,
 ): Promise<Employee[]> {
   const db = await getDb();
   const args: (string | number)[] = [];
-  const where = ["status = 'active'"];
+  const where = [LIVE, "status = 'active'"];
 
-  if (createdBy != null) {
-    where.push('created_by = ?');
-    args.push(createdBy);
+  if (ownerId != null) {
+    where.push('owner_id = ?');
+    args.push(ownerId);
   }
   if (onDate) {
     // Single quotes matter: the wa-sqlite build behind expo-sqlite on web is
@@ -74,9 +80,12 @@ export async function listWorkingEmployees(
   );
 }
 
-export async function getEmployee(id: number): Promise<Employee | null> {
+export async function getEmployee(id: string): Promise<Employee | null> {
   const db = await getDb();
-  return db.getFirstAsync<Employee>('SELECT * FROM employees WHERE id = ?', id);
+  return db.getFirstAsync<Employee>(
+    `SELECT * FROM employees WHERE id = ? AND ${LIVE}`,
+    id,
+  );
 }
 
 /**
@@ -85,15 +94,15 @@ export async function getEmployee(id: number): Promise<Employee | null> {
  */
 export async function findEmployeeByPhone(
   phone: string,
-  createdBy?: number | null,
+  ownerId?: string | null,
 ): Promise<Employee | null> {
   if (!phone) return null;
   const db = await getDb();
   const args: (string | number)[] = [phone];
-  let clause = 'phone = ?';
-  if (createdBy != null) {
-    clause += ' AND created_by = ?';
-    args.push(createdBy);
+  let clause = `phone = ? AND ${LIVE}`;
+  if (ownerId != null) {
+    clause += ' AND owner_id = ?';
+    args.push(ownerId);
   }
   return db.getFirstAsync<Employee>(
     `SELECT * FROM employees WHERE ${clause} LIMIT 1`,
@@ -101,12 +110,16 @@ export async function findEmployeeByPhone(
   );
 }
 
-export async function createEmployee(emp: NewEmployee): Promise<number> {
+/** Returns the UUID it minted, since there is no autoincrement id to read back. */
+export async function createEmployee(emp: NewEmployee): Promise<string> {
   const db = await getDb();
-  const res = await db.runAsync(
+  const id = randomUUID();
+  await db.runAsync(
     `INSERT INTO employees
-      (name, phone, resi_address, status, remarks, start_date, end_date, wage_type, wage_amt, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, owner_id, name, phone, resi_address, status, remarks, start_date, end_date, wage_type, wage_amt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    emp.owner_id,
     emp.name,
     emp.phone ?? '',
     emp.resi_address,
@@ -116,12 +129,11 @@ export async function createEmployee(emp: NewEmployee): Promise<number> {
     emp.end_date,
     emp.wage_type,
     emp.wage_amt,
-    emp.created_by,
   );
-  return res.lastInsertRowId;
+  return id;
 }
 
-export async function updateEmployee(id: number, emp: Partial<NewEmployee>): Promise<void> {
+export async function updateEmployee(id: string, emp: Partial<NewEmployee>): Promise<void> {
   const entries = Object.entries(emp).filter(([, v]) => v !== undefined);
   if (entries.length === 0) return;
   const db = await getDb();
@@ -135,31 +147,47 @@ export async function updateEmployee(id: number, emp: Partial<NewEmployee>): Pro
 
 /** Soft toggle between Working / Not working. */
 export async function setEmployeeStatus(
-  id: number,
+  id: string,
   status: 'active' | 'inactive',
 ): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE employees SET status = ? WHERE id = ?', status, id);
 }
 
-/** Removes the Saathi and, via ON DELETE CASCADE, all of their attendance. */
-export async function deleteEmployee(id: number): Promise<void> {
+/**
+ * Removes the Saathi and all of their attendance.
+ *
+ * Since v2 this stamps `deleted_at` instead of deleting: a hard DELETE is
+ * invisible to a pull-based sync, so another device would resurrect the row.
+ * The attendance rows have to be stamped explicitly - ON DELETE CASCADE no
+ * longer fires, because nothing is actually being deleted.
+ */
+export async function deleteEmployee(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM employees WHERE id = ?', id);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE attendance SET deleted_at = datetime('now','localtime') WHERE emp_id = ? AND deleted_at IS NULL",
+      id,
+    );
+    await db.runAsync(
+      "UPDATE employees SET deleted_at = datetime('now','localtime') WHERE id = ? AND deleted_at IS NULL",
+      id,
+    );
+  });
 }
 
 export async function countEmployees(
-  createdBy?: number | null,
+  ownerId?: string | null,
 ): Promise<{ active: number; inactive: number; total: number }> {
   const db = await getDb();
-  const clause = createdBy != null ? 'WHERE created_by = ?' : '';
-  const args = createdBy != null ? [createdBy] : [];
+  const clause = ownerId != null ? ` AND owner_id = ?` : '';
+  const args = ownerId != null ? [ownerId] : [];
   const row = await db.getFirstAsync<{ active: number; inactive: number; total: number }>(
     `SELECT
        COALESCE(SUM(status = 'active'), 0)   AS active,
        COALESCE(SUM(status = 'inactive'), 0) AS inactive,
        COUNT(*)                              AS total
-     FROM employees ${clause}`,
+     FROM employees WHERE ${LIVE}${clause}`,
     ...args,
   );
   return row ?? { active: 0, inactive: 0, total: 0 };

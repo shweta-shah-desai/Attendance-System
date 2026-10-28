@@ -83,7 +83,7 @@ const FIELD_ORDER: Array<{ key: keyof EmployeeForm; label: string }> = [
 /**
  * "New Saathi" - the employee entry screen.
  *
- * The form writes one employees row (created_by = signed-in user, created_at
+ * The form writes one employees row (owner_id = signed-in user, created_at
  * stamped by SQLite) and the Working Saathi list below it re-reads the table
  * straight after, so the user sees the Saathi they just added.
  */
@@ -173,6 +173,14 @@ export default function NewSaathiScreen() {
         }
       }
 
+      // owner_id is NOT NULL since v2 - a Saathi with no household cannot be
+      // scoped by Row Level Security, so there is nothing sensible to write.
+      if (!user) {
+        setSaveError('Please sign in again before adding a Saathi.');
+        setShowSummary(true);
+        return;
+      }
+
       await createEmployee({
         name: values.name.trim(),
         phone,
@@ -183,7 +191,7 @@ export default function NewSaathiScreen() {
         end_date: fromUi(values.end_date),
         wage_type: values.wage_type,
         wage_amt: Number(values.wage_amt),
-        created_by: user?.id ?? null,
+        owner_id: user.id,
       });
 
       clearForm();

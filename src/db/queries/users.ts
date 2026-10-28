@@ -1,25 +1,39 @@
+import { randomUUID } from 'expo-crypto';
 import { getDb } from '../client';
 import type { User } from '../../types/user';
 
 export async function findUserByPhone(phone: string): Promise<User | null> {
   const db = await getDb();
-  return db.getFirstAsync<User>('SELECT * FROM users WHERE phone = ?', phone);
+  return db.getFirstAsync<User>(
+    'SELECT * FROM users WHERE phone = ? AND deleted_at IS NULL',
+    phone,
+  );
 }
 
-export async function getUserById(id: number): Promise<User | null> {
+export async function getUserById(id: string): Promise<User | null> {
   const db = await getDb();
-  return db.getFirstAsync<User>('SELECT * FROM users WHERE id = ?', id);
+  return db.getFirstAsync<User>(
+    'SELECT * FROM users WHERE id = ? AND deleted_at IS NULL',
+    id,
+  );
 }
 
+/**
+ * The id is minted here rather than read back from the insert, since v2 keys
+ * are UUIDs. Phase 3 replaces this with the Supabase `auth.uid()`; until then
+ * a local account carries a locally-generated id.
+ */
 export async function createUser(name: string, phone: string): Promise<User> {
   const db = await getDb();
-  const res = await db.runAsync(
-    'INSERT INTO users (name, phone, status) VALUES (?, ?, ?)',
+  const id = randomUUID();
+  await db.runAsync(
+    'INSERT INTO users (id, name, phone, status) VALUES (?, ?, ?, ?)',
+    id,
     name,
     phone,
     'active',
   );
-  const created = await getUserById(res.lastInsertRowId);
+  const created = await getUserById(id);
   if (!created) throw new Error('Could not create the user record');
   return created;
 }
@@ -57,7 +71,7 @@ export async function loginOrRegister(
 }
 
 export async function updateUser(
-  id: number,
+  id: string,
   patch: Partial<Pick<User, 'name' | 'email_id' | 'resi_address' | 'status'>>,
 ): Promise<void> {
   const entries = Object.entries(patch).filter(([, v]) => v !== undefined);

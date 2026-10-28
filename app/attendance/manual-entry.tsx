@@ -99,7 +99,7 @@ export default function HajariScreen() {
   const remarks = watch('remarks') ?? '';
 
   const dateDb = fromUi(dateUi);
-  const empId = empIdText ? Number(empIdText) : null;
+  const empId = empIdText || null;
 
   const {
     employees,
@@ -184,7 +184,7 @@ export default function HajariScreen() {
     const wasUpdate = existing != null;
     try {
       await upsertAttendance({
-        emp_id: Number(values.emp_id),
+        emp_id: values.emp_id,
         date: db,
         time_in: null,
         time_out: null,
