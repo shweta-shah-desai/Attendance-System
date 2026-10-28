@@ -6,3 +6,10 @@ web-build/
 .DS_Store
 ios/
 android/
+
+# Local environment — never commit; see .env.example for the key names
+.env
+.env.local
+
+# Compiled output of the migration harness (scripts/migration-test)
+scripts/migration-test/build/
