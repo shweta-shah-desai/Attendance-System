@@ -55,7 +55,7 @@ const statusOptions = (current: AttendanceStatus): ReadonlyArray<DropdownOption<
 export default function AttendanceDetailScreen() {
   const { status: authStatus } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
-  const id = params.id ? Number(params.id) : null;
+  const id = params.id ?? null;
 
   const { entry, loading, error, reload } = useAttendanceDetail(id);
   const { employees } = useEmployees({ status: 'all', sort: 'name_asc' });
@@ -122,7 +122,7 @@ export default function AttendanceDetailScreen() {
     setSaveError(null);
     try {
       await updateAttendance(entry.id, {
-        emp_id: Number(empIdText),
+        emp_id: empIdText,
         date: dateDb,
         status,
       });

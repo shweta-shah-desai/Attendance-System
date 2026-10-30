@@ -5,7 +5,7 @@ import { emptyTally } from '../../types/report';
 import dayjs, { daysInMonth, monthEnd, monthStart } from '../../utils/date';
 
 interface RawTallyRow {
-  emp_id: number;
+  emp_id: string;
   name: string;
   wage_type: Employee['wage_type'];
   wage_amt: number;
@@ -21,18 +21,21 @@ interface RawTallyRow {
  */
 export async function monthSummaries(
   month: string,
-  createdBy?: number | null,
+  ownerId?: string | null,
   onlyActive = true,
 ): Promise<EmployeeMonthSummary[]> {
   const db = await getDb();
   const from = monthStart(month);
   const to = monthEnd(month);
 
-  const where: string[] = [];
+  // e.deleted_at guards the driving table; the attendance side is guarded in
+  // the JOIN's ON clause, not here - in a WHERE it would turn the LEFT JOIN
+  // into an inner one and drop every Saathi with no marks this month.
+  const where: string[] = ['e.deleted_at IS NULL'];
   const args: (string | number)[] = [from, to];
-  if (createdBy != null) {
-    where.push('e.created_by = ?');
-    args.push(createdBy);
+  if (ownerId != null) {
+    where.push('e.owner_id = ?');
+    args.push(ownerId);
   }
   if (onlyActive) where.push("e.status = 'active'");
 
@@ -41,14 +44,14 @@ export async function monthSummaries(
             a.status, COUNT(a.id) AS count
      FROM employees e
      LEFT JOIN attendance a
-            ON a.emp_id = e.id AND a.date BETWEEN ? AND ?
-     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+            ON a.emp_id = e.id AND a.date BETWEEN ? AND ? AND a.deleted_at IS NULL
+     WHERE ${where.join(' AND ')}
      GROUP BY e.id, a.status
      ORDER BY e.name COLLATE NOCASE`,
     ...args,
   );
 
-  const byEmp = new Map<number, EmployeeMonthSummary>();
+  const byEmp = new Map<string, EmployeeMonthSummary>();
 
   for (const row of rows) {
     let summary = byEmp.get(row.emp_id);
@@ -103,7 +106,7 @@ function tenureDaysInMonth(
 export async function dailyTrend(
   from: string,
   to: string,
-  empId?: number | null,
+  empId?: string | null,
 ): Promise<TrendPoint[]> {
   const db = await getDb();
   const args: (string | number)[] = [from, to];
@@ -117,7 +120,7 @@ export async function dailyTrend(
             COALESCE(SUM(CASE WHEN status IN ('Present','WFH') THEN 1
                               WHEN status = 'Half-day' THEN 0.5 ELSE 0 END), 0) AS present
      FROM attendance
-     WHERE date BETWEEN ? AND ?${clause}
+     WHERE date BETWEEN ? AND ? AND deleted_at IS NULL${clause}
      GROUP BY date
      ORDER BY date`,
     ...args,
@@ -128,7 +131,7 @@ export async function dailyTrend(
 /** Month-over-month attendance percentage for the last N months. */
 export async function monthlyTrend(
   months: string[],
-  empId?: number | null,
+  empId?: string | null,
 ): Promise<TrendPoint[]> {
   const out: TrendPoint[] = [];
   for (const m of months) {
@@ -156,11 +159,11 @@ export interface OverviewStats {
 export async function overviewStats(
   date: string,
   month: string,
-  createdBy?: number | null,
+  ownerId?: string | null,
 ): Promise<OverviewStats> {
   const db = await getDb();
-  const creator = createdBy != null ? 'AND e.created_by = ?' : '';
-  const creatorArgs = createdBy != null ? [createdBy] : [];
+  const owner = ownerId != null ? 'AND e.owner_id = ?' : '';
+  const ownerArgs = ownerId != null ? [ownerId] : [];
 
   const today = await db.getFirstAsync<{
     total: number;
@@ -175,13 +178,14 @@ export async function overviewStats(
                            THEN a.emp_id END)                             AS present,
        COUNT(DISTINCT CASE WHEN a.status = 'Absent' THEN a.emp_id END)    AS absent
      FROM employees e
-     LEFT JOIN attendance a ON a.emp_id = e.id AND a.date = ?
-     WHERE e.status = 'active' ${creator}`,
+     LEFT JOIN attendance a
+            ON a.emp_id = e.id AND a.date = ? AND a.deleted_at IS NULL
+     WHERE e.status = 'active' AND e.deleted_at IS NULL ${owner}`,
     date,
-    ...creatorArgs,
+    ...ownerArgs,
   );
 
-  const summaries = await monthSummaries(month, createdBy ?? null, true);
+  const summaries = await monthSummaries(month, ownerId ?? null, true);
   const worked = summaries.reduce((s, r) => s + r.payableDays, 0);
   const possible = summaries.reduce((s, r) => s + r.totalDays, 0);
 

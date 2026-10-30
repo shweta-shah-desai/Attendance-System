@@ -186,7 +186,7 @@ export default function AutoHajariScreen() {
   const status = watch('status');
 
   const custom = period === 'custom';
-  const empId = empIdText ? Number(empIdText) : null;
+  const empId = empIdText || null;
 
   // Only a Saathi still on the books can be given a period of attendance.
   const {
@@ -309,7 +309,7 @@ export default function AutoHajariScreen() {
     setSaveError(null);
     try {
       const result = await autoMarkRange({
-        emp_id: Number(pending.emp_id),
+        emp_id: pending.emp_id,
         from: effective.from,
         to: effective.to,
         status: pending.status,

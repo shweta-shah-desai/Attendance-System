@@ -73,5 +73,5 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 /** Convenience selector - the id every query scopes its rows by. */
-export const useCurrentUserId = (): number | null =>
+export const useCurrentUserId = (): string | null =>
   useAuthStore((s) => s.user?.id ?? null);

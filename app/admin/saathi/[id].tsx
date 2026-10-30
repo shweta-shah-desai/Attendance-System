@@ -109,7 +109,7 @@ const EMPTY_FORM: EmployeeForm = {
 export default function SaathiDetailScreen() {
   const { status: authStatus, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
-  const id = params.id ? Number(params.id) : null;
+  const id = params.id ?? null;
 
   const { employee, loading, error, reload } = useEmployeeDetail(id);
 

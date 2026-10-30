@@ -12,7 +12,7 @@ export interface StatusTally {
 }
 
 export interface EmployeeMonthSummary {
-  empId: number;
+  empId: string;
   empName: string;
   wageType: WageType;
   wageAmt: number;
