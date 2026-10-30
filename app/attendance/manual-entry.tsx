@@ -28,6 +28,7 @@ import { colors, tints } from '../../src/constants/colors';
 import { radius, spacing, MIN_TOUCH } from '../../src/constants/spacing';
 import { typography } from '../../src/constants/typography';
 import { upsertAttendance } from '../../src/db/queries/attendance';
+import { scheduleSync } from '../../src/services/sync';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useExistingEntry } from '../../src/hooks/useAttendance';
 import { useMarkableSaathi } from '../../src/hooks/useEmployees';
@@ -193,6 +194,7 @@ export default function HajariScreen() {
         entry_type: 'manual',
         entered_by: user?.id ?? null,
       });
+      scheduleSync();
 
       // Keep the date so several Saathi can be marked for the same day in a row.
       reset({ ...defaults, date: values.date });

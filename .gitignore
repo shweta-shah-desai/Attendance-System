@@ -13,3 +13,16 @@ android/
 
 # Compiled output of the migration harness (scripts/migration-test)
 scripts/migration-test/build/
+
+# Compiled output of the sync harness (scripts/sync-test)
+scripts/sync-test/build/
+
+# Compiled output of the holidays harness (scripts/holidays-test)
+scripts/holidays-test/build/
+
+# ignore documentation
+attendance-app-513210-be34c7da4f9e.json
+convert_app_to_online_with data_storage.md
+BUILD_REVIEW_AND_TEST_PLAN.txt
+Bug Findings.docx
+GarSaathiPlus.apk

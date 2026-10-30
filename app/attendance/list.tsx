@@ -25,6 +25,7 @@ import { radius, shadow, spacing, MIN_TOUCH } from '../../src/constants/spacing'
 import { typography } from '../../src/constants/typography';
 import { useAuth } from '../../src/hooks/useAuth';
 import { deleteAttendance } from '../../src/db/queries/attendance';
+import { scheduleSync } from '../../src/services/sync';
 import { useAttendanceRange } from '../../src/hooks/useAttendance';
 import type { AttendanceWithEmployee } from '../../src/types/attendance';
 import { fromUi, lastNDays, prettyDate, toUi, today } from '../../src/utils/date';
@@ -126,6 +127,9 @@ export default function AttendanceListScreen() {
     setDeleteError(null);
     try {
       await deleteAttendance(pending.id);
+      // A soft delete pushes like any other row, so the deletion reaches the
+      // other devices instead of being resurrected by their next pull.
+      scheduleSync();
       const gone = pending.emp_name + ' on ' + toUi(pending.date);
       setPending(null);
       // Back to the list, minus the row that was just removed.

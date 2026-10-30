@@ -30,9 +30,9 @@ export interface MenuItem {
 }
 
 /**
- * Menu structure exactly as specified: Home, Saathi, Hajari (Attendance),
- * Report - and inside each group, the "add" screen before the list, because
- * that is the order the work happens in.
+ * Menu structure as specified: Home, Saathi, Hajari (Attendance), Holidays,
+ * My Profile, Report - and inside each group, the "add" screen before the
+ * list, because that is the order the work happens in.
  */
 export const MENU: MenuItem[] = [
   { key: 'home', label: 'Home', icon: 'home-variant', route: '/(tabs)/home' },
@@ -80,6 +80,8 @@ export const MENU: MenuItem[] = [
       },
     ],
   },
+  { key: 'holidays', label: 'Holidays', icon: 'calendar-star', route: '/holidays' },
+  { key: 'profile', label: 'My Profile', icon: 'account-circle', route: '/profile' },
   { key: 'report', label: 'Report', icon: 'chart-box', route: '/(tabs)/reports' },
 ];
 

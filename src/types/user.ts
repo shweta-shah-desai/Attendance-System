@@ -9,6 +9,12 @@ export interface User {
   phone: string; // 10 digits, no +91 prefix stored
   resi_address: string | null;
   status: Status;
+  /**
+   * When this mobile number first ever signed up - write-once, never shown.
+   * Sourced from Supabase auth.users.created_at so it survives a reinstall or
+   * a new phone. Null only on a row that predates v4 and has never synced.
+   */
+  join_date: string | null;
   created_at: string; // ISO string
   updated_at: string;
 }

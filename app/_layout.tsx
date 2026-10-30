@@ -1,3 +1,7 @@
+// supabase-js builds request URLs with the WHATWG URL API, which React
+// Native only partially implements - this polyfill must load before the
+// client is ever imported, so it sits at the app's first module.
+import 'react-native-url-polyfill/auto';
 import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -53,6 +57,8 @@ export default function RootLayout() {
           />
           <Stack.Screen name="admin/employees" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="admin/saathi/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="holidays" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </PaperProvider>
     </SafeAreaProvider>

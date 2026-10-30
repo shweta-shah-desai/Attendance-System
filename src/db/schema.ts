@@ -21,7 +21,7 @@
 export const DB_NAME = 'gharsaathi.db';
 
 /** Bump this whenever a new migration is appended. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export const CREATE_USERS = `
 CREATE TABLE IF NOT EXISTS users (
@@ -31,11 +31,25 @@ CREATE TABLE IF NOT EXISTS users (
   phone         TEXT    NOT NULL UNIQUE,
   resi_address  TEXT,
   status        TEXT    NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  join_date     TEXT,
   pending_sync  INTEGER NOT NULL DEFAULT 1,
   deleted_at    TEXT,
   created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
   updated_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );`;
+
+/**
+ * `join_date` (v4) is when this mobile number first ever created an account -
+ * write-once, and never shown on screen.
+ *
+ * It is NOT `created_at`: created_at is when the row appeared in *this*
+ * device's database, which a reinstall or a new phone resets. The value comes
+ * from Supabase `auth.users.created_at`, the one timestamp that belongs to the
+ * phone number rather than to the device, so it survives a logout, a crash, a
+ * reinstall and a device change. The name on the account may change; this does
+ * not. Every write path uses COALESCE so an existing value can never be
+ * overwritten.
+ */
 
 /**
  * `owner_id` carries no REFERENCES clause on purpose. On the server it is a
@@ -107,6 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_attendance_pending  ON attendance (pending_sync);
 CREATE INDEX IF NOT EXISTS idx_employees_status    ON employees (status);
 CREATE INDEX IF NOT EXISTS idx_employees_owner     ON employees (owner_id);
 CREATE INDEX IF NOT EXISTS idx_employees_pending   ON employees (pending_sync);
+CREATE INDEX IF NOT EXISTS idx_holidays_date       ON holidays (date);
 `;
 
 /**
@@ -118,11 +133,18 @@ CREATE INDEX IF NOT EXISTS idx_employees_pending   ON employees (pending_sync);
  * to remember to mark a row dirty. The one statement that sets `updated_at`
  * itself - the attendance upsert - therefore sets `pending_sync` itself too,
  * because this trigger's WHEN guard skips it.
+ *
+ * v3 added the `pending_sync` half of the guard, and the sync engine cannot
+ * work without it: a successful push clears the flag without touching
+ * `updated_at`, which the v2 guard read as an ordinary edit and answered by
+ * setting the flag straight back to 1. Every pushed row stayed dirty forever,
+ * so every sync re-uploaded the entire register.
  */
 const touchTrigger = (table: string) => `
 CREATE TRIGGER IF NOT EXISTS trg_${table}_touch
 AFTER UPDATE ON ${table}
 FOR EACH ROW WHEN OLD.updated_at = NEW.updated_at
+                  AND OLD.pending_sync = NEW.pending_sync
 BEGIN
   UPDATE ${table}
      SET updated_at = datetime('now','localtime'), pending_sync = 1

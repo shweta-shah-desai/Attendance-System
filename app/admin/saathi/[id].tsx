@@ -28,6 +28,7 @@ import { colors, tints } from '../../../src/constants/colors';
 import { radius, spacing, MIN_TOUCH } from '../../../src/constants/spacing';
 import { typography } from '../../../src/constants/typography';
 import { findEmployeeByPhone, updateEmployee } from '../../../src/db/queries/employees';
+import { scheduleSync } from '../../../src/services/sync';
 import { useAuth } from '../../../src/hooks/useAuth';
 import { useEmployeeDetail } from '../../../src/hooks/useEmployees';
 import type { Employee } from '../../../src/types/attendance';
@@ -204,6 +205,7 @@ export default function SaathiDetailScreen() {
         wage_type: values.wage_type,
         wage_amt: Number(values.wage_amt),
       });
+      scheduleSync();
 
       setEditing(false);
       // Straight back to All Saathi, which reloads on focus and so already

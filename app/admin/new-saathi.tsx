@@ -29,6 +29,7 @@ import { colors, tints } from '../../src/constants/colors';
 import { radius, spacing, MIN_TOUCH } from '../../src/constants/spacing';
 import { typography } from '../../src/constants/typography';
 import { createEmployee, findEmployeeByPhone } from '../../src/db/queries/employees';
+import { scheduleSync } from '../../src/services/sync';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useWorkingSaathi } from '../../src/hooks/useEmployees';
 import { fromUi } from '../../src/utils/date';
@@ -193,6 +194,10 @@ export default function NewSaathiScreen() {
         wage_amt: Number(values.wage_amt),
         owner_id: user.id,
       });
+
+      // Fire-and-forget: the row is already safe in SQLite, and the hero's
+      // sync line is where its upload reports in.
+      scheduleSync();
 
       clearForm();
       flashAdded(values.name.trim(), values.status === 'active');

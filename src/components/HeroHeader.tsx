@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LogoLink } from './LogoLink';
+import { SyncStatus } from './SyncStatus';
 import { colors } from '../constants/colors';
 import { radius, spacing, MIN_TOUCH } from '../constants/spacing';
 import { typography } from '../constants/typography';
@@ -57,6 +58,9 @@ export function HeroHeader({ onOpenMenu, onAddEmployee, children }: Props) {
           />
         ) : null}
       </View>
+
+      {/* Where the register is saved, directly under the brand bar. */}
+      <SyncStatus />
 
       {children ? <View style={styles.body}>{children}</View> : null}
     </View>

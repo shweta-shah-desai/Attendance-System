@@ -13,9 +13,34 @@ export const DB_DATE = 'YYYY-MM-DD';
 export const UI_DATE = 'DD/MM/YYYY';
 export const DB_MONTH = 'YYYY-MM';
 
+/**
+ * How SQLite stores created_at / updated_at: `datetime('now','localtime')`.
+ * Rows pulled from Postgres arrive as tz-aware ISO strings and are converted
+ * into this shape, so one column never holds two formats - a mix would break
+ * every ORDER BY and every last-write-wins comparison on it.
+ */
+export const DB_TIMESTAMP = 'YYYY-MM-DD HH:mm:ss';
+
 export const today = (): string => dayjs().format(DB_DATE);
 export const nowIso = (): string => dayjs().toISOString();
 export const nowTime = (): string => dayjs().format('HH:mm');
+/** Local wall-clock stamp in the SQLite column format. */
+export const nowStamp = (): string => dayjs().format(DB_TIMESTAMP);
+/** Server ISO timestamp -> the local SQLite stamp format. */
+export const toDbStamp = (iso: string): string => dayjs(iso).format(DB_TIMESTAMP);
+/** Local SQLite stamp -> ISO, for sending a row up to Postgres. */
+export const fromDbStamp = (stamp: string): string =>
+  dayjs(stamp, DB_TIMESTAMP).toISOString();
+/** "just now" / "4 min ago" / "2 hr ago" / "28 Oct" - the sync status line. */
+export const sinceStamp = (stamp: string): string => {
+  const then = dayjs(stamp, DB_TIMESTAMP);
+  const mins = dayjs().diff(then, 'minute');
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  return then.format('DD MMM');
+};
 
 export const toDb = (d: Dayjs | Date | string): string => dayjs(d).format(DB_DATE);
 
@@ -32,6 +57,11 @@ export const fromUi = (s?: string | null): string | null => {
 
 export const prettyDate = (d: string): string => dayjs(d).format('ddd, DD MMM YYYY');
 export const prettyMonth = (m: string): string => dayjs(`${m}-01`).format('MMMM YYYY');
+/** "Mon" - the weekday beside a holiday's date. */
+export const weekdayShort = (d: string): string => dayjs(d, DB_DATE).format('ddd');
+/** Day number without the leading zero, for the holiday list's date column. */
+export const dayOfMonth = (d: string): string => String(Number(d.slice(8, 10)));
+export const currentYear = (): number => dayjs().year();
 export const monthOf = (d: string): string => dayjs(d).format(DB_MONTH);
 export const currentMonth = (): string => dayjs().format(DB_MONTH);
 

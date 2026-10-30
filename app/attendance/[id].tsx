@@ -16,6 +16,7 @@ import { colors, tints } from '../../src/constants/colors';
 import { radius, spacing, MIN_TOUCH } from '../../src/constants/spacing';
 import { typography } from '../../src/constants/typography';
 import { updateAttendance } from '../../src/db/queries/attendance';
+import { scheduleSync } from '../../src/services/sync';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useAttendanceDetail } from '../../src/hooks/useAttendance';
 import { useEmployees } from '../../src/hooks/useEmployees';
@@ -126,6 +127,7 @@ export default function AttendanceDetailScreen() {
         date: dateDb,
         status,
       });
+      scheduleSync();
       setEditing(false);
       // Straight back to the list, which reloads on focus and so already shows
       // the change. Going back rather than replacing keeps the filter the user

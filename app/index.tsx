@@ -6,6 +6,7 @@ import { colors } from '../src/constants/colors';
 import { spacing } from '../src/constants/spacing';
 import { typography } from '../src/constants/typography';
 import { initDatabase } from '../src/db/client';
+import { syncNow } from '../src/services/sync';
 import { useAuthStore } from '../src/store/authStore';
 
 /**
@@ -53,6 +54,10 @@ export default function SplashScreen() {
         if (cancelled) return;
         setMessage('Checking your login...');
         const status = await restore();
+
+        // Deliberately not awaited: Home must never wait on the network. The
+        // engine reports itself through the sync line in the hero header.
+        if (status === 'authenticated') void syncNow();
 
         // Hold the splash for the remainder of MIN_VISIBLE_MS.
         const elapsed = Date.now() - startedAt;

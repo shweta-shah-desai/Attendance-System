@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { getDb } from '../client';
-import type { User } from '../../types/user';
+import type { Status, User } from '../../types/user';
+import { nowIso } from '../../utils/date';
 
 export async function findUserByPhone(phone: string): Promise<User | null> {
   const db = await getDb();
@@ -39,35 +40,85 @@ export async function createUser(name: string, phone: string): Promise<User> {
 }
 
 /**
- * Login rule from the spec: look the mobile number up; sign the person in if
- * it exists, otherwise create the account and sign them in. If the stored name
- * differs from what was typed, the typed name wins.
+ * Mirrors the cloud `profiles` row into the local `users` table after a sign-in
+ * or signup. The id IS the Supabase `auth.uid()`, so this is the row every
+ * other table's `owner_id` points at.
  *
- * An inactive row is reactivated on login. Without that, the number would sign
- * in here but be rejected by the session restore on the next app start, which
- * only accepts active users.
+ * `pending_sync = 0` because the row just came FROM the server - marking it
+ * dirty would push the server's own data straight back at it. The touch
+ * trigger is sidestepped by writing `updated_at` explicitly.
+ *
+ * The phone collision handled first is the upgrade path, and without it the
+ * app could not be upgraded at all: a device that already holds a register has
+ * a pre-cloud `users` row carrying a locally-minted id and the same mobile
+ * number, `phone` is UNIQUE, so this INSERT would fail and the sign-in would
+ * die on "Could not save your profile on this device". The old row is dropped
+ * rather than updated because its id is the thing that has to change, and
+ * nothing references it with a foreign key (see the owner_id note in
+ * src/db/schema.ts). Phase 6's adoption then re-points its data at the new id.
  */
-export async function loginOrRegister(
-  name: string,
-  phone: string,
-): Promise<{ user: User; isNew: boolean }> {
-  const existing = await findUserByPhone(phone);
-  if (!existing) {
-    return { user: await createUser(name, phone), isNew: true };
-  }
+export async function upsertUserFromProfile(profile: {
+  id: string;
+  name: string;
+  phone: string;
+  email_id?: string | null;
+  resi_address?: string | null;
+  status?: Status;
+  /** auth.users.created_at, local stamp format. Used only if none is stored. */
+  join_date?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}): Promise<User> {
+  const db = await getDb();
+  const now = nowIso();
 
-  const nameChanged = existing.name !== name;
-  const wasInactive = existing.status !== 'active';
-  if (nameChanged || wasInactive) {
-    const db = await getDb();
-    await db.runAsync(
-      "UPDATE users SET name = ?, status = 'active' WHERE id = ?",
-      name,
-      existing.id,
-    );
-    return { user: { ...existing, name, status: 'active' }, isNew: false };
-  }
-  return { user: existing, isNew: false };
+  // join_date belongs to the phone number, not to the row, so the pre-cloud
+  // row's value is carried over before that row is dropped below - otherwise
+  // upgrading would reset the join date of a register years old.
+  const legacy = await db.getFirstAsync<{ join_date: string | null; created_at: string }>(
+    'SELECT join_date, created_at FROM users WHERE phone = ? AND id <> ?',
+    profile.phone,
+    profile.id,
+  );
+  // The EARLIEST of the candidates wins, not the incoming one. For a user
+  // upgrading an existing register, auth.users.created_at is today - they only
+  // just created the cloud account - while the pre-cloud row has been on the
+  // phone for years. The first use of this mobile number is the older of the
+  // two, so picking the incoming value would reset a years-old join date.
+  const candidates = [profile.join_date, legacy?.join_date, legacy?.created_at].filter(
+    (v): v is string => typeof v === 'string' && v.length > 0,
+  );
+  const joinDate = candidates.length > 0 ? [...candidates].sort()[0] : now;
+
+  await db.runAsync('DELETE FROM users WHERE phone = ? AND id <> ?', profile.phone, profile.id);
+  await db.runAsync(
+    `INSERT INTO users (id, name, email_id, phone, resi_address, status, join_date,
+                        pending_sync, deleted_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name         = excluded.name,
+       email_id     = excluded.email_id,
+       phone        = excluded.phone,
+       resi_address = excluded.resi_address,
+       status       = excluded.status,
+       -- Write-once: an existing join_date always wins over the incoming one.
+       join_date    = COALESCE(users.join_date, excluded.join_date),
+       pending_sync = 0,
+       deleted_at   = NULL,
+       updated_at   = excluded.updated_at`,
+    profile.id,
+    profile.name,
+    profile.email_id ?? null,
+    profile.phone,
+    profile.resi_address ?? null,
+    profile.status ?? 'active',
+    joinDate,
+    profile.created_at ?? now,
+    profile.updated_at ?? now,
+  );
+  const saved = await getUserById(profile.id);
+  if (!saved) throw new Error('Could not save your profile on this device');
+  return saved;
 }
 
 export async function updateUser(

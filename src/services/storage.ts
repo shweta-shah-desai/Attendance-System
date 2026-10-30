@@ -28,7 +28,12 @@ const nativeStore = {
   removeItem: (k: string) => SecureStore.deleteItemAsync(k),
 };
 
-const store = Platform.OS === 'web' ? webStore : nativeStore;
+/**
+ * The one key/value adapter this app uses. Supabase's `auth.storage` option
+ * expects exactly this getItem/setItem/removeItem shape, so it is exported
+ * rather than duplicated in src/services/supabase.ts.
+ */
+export const store = Platform.OS === 'web' ? webStore : nativeStore;
 
 export async function saveSession(session: Session): Promise<void> {
   await store.setItem(SESSION_KEY, JSON.stringify(session));

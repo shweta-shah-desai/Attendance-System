@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -6,7 +6,9 @@ import { BurgerMenu, Calendar, Card, HeroHeader, HeroStat, Loader } from '../../
 import { colors } from '../../src/constants/colors';
 import { radius, spacing } from '../../src/constants/spacing';
 import { typography } from '../../src/constants/typography';
+import { refreshPendingCount, syncNow } from '../../src/services/sync';
 import { useAuth } from '../../src/hooks/useAuth';
+import { useSyncStore } from '../../src/store/syncStore';
 import { useMonthMarks, useOverview } from '../../src/hooks/useAttendance';
 import { currentMonth, greeting, prettyDate, today } from '../../src/utils/date';
 
@@ -23,6 +25,9 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(today());
 
   const { marks, loading: marksLoading, reload: reloadMarks } = useMonthMarks(month);
+  const syncing = useSyncStore((s) => s.phase === 'syncing');
+  const adopted = useSyncStore((s) => s.adopted);
+  const clearAdopted = useSyncStore((s) => s.clearAdopted);
   const { stats, reload: reloadStats } = useOverview();
 
   // Re-read the database whenever the screen comes back into focus, so dots
@@ -31,8 +36,21 @@ export default function HomeScreen() {
     useCallback(() => {
       void reloadMarks();
       void reloadStats();
-    }, [reloadMarks, reloadStats]),
+      // Keeps the hero's "N changes waiting" honest after a write made on
+      // another screen, without touching the network.
+      void refreshPendingCount(user?.id ?? null);
+    }, [reloadMarks, reloadStats, user?.id]),
   );
+
+  // Adoption runs inside the first sync, which is fire-and-forget - so on an
+  // upgraded device it can finish after Home has already read an empty
+  // register. Without this, the calendar and the stats stay at zero until the
+  // user happens to navigate away and back.
+  useEffect(() => {
+    if (!adopted) return;
+    void reloadMarks();
+    void reloadStats();
+  }, [adopted, reloadMarks, reloadStats]);
 
   // The session is restored on the splash screen; anyone landing here without
   // one gets sent to login.
@@ -84,16 +102,40 @@ export default function HomeScreen() {
         contentContainerStyle={styles.body}
         refreshControl={
           <RefreshControl
-            refreshing={marksLoading}
+            refreshing={marksLoading || syncing}
             onRefresh={() => {
-              void reloadMarks();
-              void reloadStats();
+              // Pull-to-refresh is the manual sync: send local changes up and
+              // bring the other device's marks down, then re-read.
+              void (async () => {
+                await syncNow({ force: true });
+                await reloadMarks();
+                await reloadStats();
+              })();
             }}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
         }
       >
+        {/* One-time notice: the records this phone already held were handed
+            to this account by the first sync. The user never asked for that,
+            so they are told rather than left to notice. */}
+        {adopted && adopted > 0 ? (
+          <Pressable
+            onPress={clearAdopted}
+            style={styles.adoptedBanner}
+            accessibilityRole="button"
+            accessibilityLabel={`Your ${adopted} existing records have been added to this account. Tap to dismiss.`}
+          >
+            <MaterialCommunityIcons name="cloud-check" size={20} color={colors.primaryDark} />
+            <Text style={styles.adoptedText}>
+              Your {adopted} existing {adopted === 1 ? 'record has' : 'records have'} been added to
+              this account.
+            </Text>
+            <MaterialCommunityIcons name="close" size={18} color={colors.primaryDark} />
+          </Pressable>
+        ) : null}
+
         <Pressable
           onPress={() => openAttendanceForm(today())}
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
@@ -140,6 +182,17 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  adoptedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryTint,
+  },
+  adoptedText: { ...typography.caption, color: colors.primaryDark, flex: 1 },
+
   root: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,

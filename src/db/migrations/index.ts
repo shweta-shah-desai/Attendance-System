@@ -2,6 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { SCHEMA_VERSION } from '../schema';
 import { upV1 } from './v1';
 import { upV2 } from './v2';
+import { upV3 } from './v3';
+import { upV4 } from './v4';
 
 export interface Migration {
   version: number;
@@ -30,8 +32,20 @@ const v2: Migration = {
   up: upV2,
 };
 
+const v3: Migration = {
+  version: 3,
+  name: 'touch-trigger-respects-pending-sync',
+  up: upV3,
+};
+
+const v4: Migration = {
+  version: 4,
+  name: 'users-join-date-and-holidays-index',
+  up: upV4,
+};
+
 /** Append new migrations here; never edit an already-shipped one. */
-export const migrations: Migration[] = [v1, v2];
+export const migrations: Migration[] = [v1, v2, v3, v4];
 
 /**
  * Runs every migration newer than the database's current `user_version`.

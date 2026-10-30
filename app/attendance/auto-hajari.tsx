@@ -29,6 +29,7 @@ import { colors, tints } from '../../src/constants/colors';
 import { radius, shadow, spacing, MIN_TOUCH } from '../../src/constants/spacing';
 import { typography } from '../../src/constants/typography';
 import { autoMarkRange } from '../../src/db/queries/attendance';
+import { scheduleSync } from '../../src/services/sync';
 import { useAuth } from '../../src/hooks/useAuth';
 import { useEmployees } from '../../src/hooks/useEmployees';
 import type { Employee } from '../../src/types/attendance';
@@ -315,6 +316,9 @@ export default function AutoHajariScreen() {
         status: pending.status,
         entered_by: user?.id ?? null,
       });
+      // One call can mark a whole month; the debounce folds that into a
+      // single upload.
+      scheduleSync();
       setPending(null);
       const name = pending.name.trim();
       const left =

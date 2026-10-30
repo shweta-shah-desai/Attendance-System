@@ -45,6 +45,8 @@ function compileMigrations() {
       '--ignoreConfig',
       'src/db/migrations/v1.ts',
       'src/db/migrations/v2.ts',
+      'src/db/migrations/v3.ts',
+      'src/db/migrations/v4.ts',
       '--outDir',
       OUT_REL,
       '--module',
@@ -67,6 +69,8 @@ const { tmpdir } = require('node:os');
 compileMigrations();
 const { upV1 } = require(join(OUT, 'src/db/migrations/v1.js'));
 const { upV2 } = require(join(OUT, 'src/db/migrations/v2.js'));
+const { upV3 } = require(join(OUT, 'src/db/migrations/v3.js'));
+const { upV4 } = require(join(OUT, 'src/db/migrations/v4.js'));
 
 const dir = mkdtempSync(join(tmpdir(), 'gharsaathi-mig-'));
 const file = join(dir, 'gharsaathi.db');
@@ -304,6 +308,97 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     }
   })();
   check('UNIQUE(emp_id, date) still holds', dupe);
+
+  // ------------------------------------------------------------- run v3
+  // v3 is a trigger swap, and the sync engine does not work without it. The
+  // first check pins down the bug it fixes, so nobody "simplifies" the guard
+  // back to the v2 shape: under v2 the engine's own "these rows are now
+  // pushed" write was indistinguishable from a user edit.
+  const rowCount = raw.prepare('SELECT COUNT(*) AS n FROM attendance').get().n;
+  raw.exec('UPDATE attendance SET pending_sync = 1');
+  raw.exec('UPDATE attendance SET pending_sync = 0');
+  const dirtyUnderV2 = raw
+    .prepare('SELECT COUNT(*) AS n FROM attendance WHERE pending_sync = 1').get().n;
+  check(
+    'v2 trigger re-dirtied every row the push had just cleared (the v3 bug)',
+    dirtyUnderV2 === rowCount,
+    dirtyUnderV2 + ' of ' + rowCount + ' still queued',
+  );
+
+  await db.withTransactionAsync(async () => {
+    await upV3(db);
+  });
+  raw.exec('PRAGMA user_version = 3');
+
+  raw.exec('UPDATE attendance SET pending_sync = 0');
+  const dirtyUnderV3 = raw
+    .prepare('SELECT COUNT(*) AS n FROM attendance WHERE pending_sync = 1').get().n;
+  check('v3: clearing pending_sync now sticks', dirtyUnderV3 === 0, dirtyUnderV3 + ' still queued');
+
+  raw.prepare("UPDATE attendance SET remarks = 'edited after v3' WHERE id = ?").run(target);
+  const reDirtied = raw
+    .prepare('SELECT pending_sync FROM attendance WHERE id = ?').get(target).pending_sync;
+  check('v3: an ordinary edit still queues the row', reDirtied === 1);
+
+  const others = raw
+    .prepare('SELECT COUNT(*) AS n FROM attendance WHERE pending_sync = 1 AND id <> ?')
+    .get(target).n;
+  check('v3: the edit queued only its own row', others === 0, others + ' other rows queued');
+
+  for (const t of ['users', 'employees']) {
+    raw.exec('UPDATE ' + t + ' SET pending_sync = 0');
+    const n = raw.prepare('SELECT COUNT(*) AS n FROM ' + t + ' WHERE pending_sync = 1').get().n;
+    check('v3: ' + t + ' trigger rebuilt too', n === 0, n + ' still queued');
+  }
+
+  const version = Object.values(raw.prepare('PRAGMA user_version').get())[0];
+  check('user_version reached 3', version === 3, String(version));
+
+  // ------------------------------------------------------------- run v4
+  // v4 adds users.join_date (write-once, never shown) and backfills it from
+  // created_at, which is the best value a device upgraded from an older build
+  // can offer. ALTER TABLE ADD COLUMN rewrites nothing, so unlike v2 there is
+  // no rebuild to survive - but the backfill still has to be right.
+  const usersBefore = raw.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  const createdAts = raw.prepare('SELECT id, created_at FROM users ORDER BY id').all();
+
+  await db.withTransactionAsync(async () => {
+    await upV4(db);
+  });
+  raw.exec('PRAGMA user_version = 4');
+
+  const cols = raw.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  check('v4: users.join_date exists', cols.includes('join_date'));
+  check(
+    'v4: no user row was lost',
+    raw.prepare('SELECT COUNT(*) AS n FROM users').get().n === usersBefore,
+  );
+
+  const joins = raw.prepare('SELECT id, join_date FROM users ORDER BY id').all();
+  check(
+    'v4: every existing user got a join_date',
+    joins.length > 0 && joins.every((r) => !!r.join_date),
+  );
+  check(
+    'v4: the backfill used that row own created_at',
+    joins.every((r, i) => r.join_date === createdAts[i].created_at),
+  );
+
+  // Write-once: re-running the migration must not move a stored value.
+  raw.exec("UPDATE users SET join_date = '2020-01-01 08:00:00'");
+  await db.withTransactionAsync(async () => {
+    await upV4(db);
+  });
+  const kept = raw.prepare('SELECT join_date FROM users LIMIT 1').get().join_date;
+  check('v4: a stored join_date is never overwritten', kept === '2020-01-01 08:00:00', kept);
+
+  const idx = raw
+    .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND name = ?")
+    .get('idx_holidays_date').n;
+  check('v4: the holidays date index exists', idx === 1);
+
+  const v4Version = Object.values(raw.prepare('PRAGMA user_version').get())[0];
+  check('user_version reached 4', v4Version === 4, String(v4Version));
 
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
   raw.close();

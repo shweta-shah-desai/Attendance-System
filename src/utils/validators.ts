@@ -45,12 +45,83 @@ const uiDateRequired = z
     return !db || !isFuture(db);
   }, 'You cannot mark attendance for a future date');
 
-/** Login popup: name + 10-digit mobile. */
+/** Account PIN: exactly 6 digits - it is the Supabase account password. */
+export const PIN_RE = /^\d{6}$/;
+const pinField = z.string().trim().regex(PIN_RE, 'PIN must be 6 digits');
+
+/** Login popup: 10-digit mobile + 6-digit PIN. The name comes from the profile. */
 export const loginSchema = z.object({
-  name: nameField(50),
   phone: phoneRequired,
+  pin: pinField,
 });
 export type LoginForm = z.infer<typeof loginSchema>;
+
+/** Signup popup: the PIN is typed twice, since a wrong one locks the register. */
+export const signupSchema = z
+  .object({
+    name: nameField(50),
+    phone: phoneRequired,
+    pin: pinField,
+    confirmPin: pinField,
+  })
+  .refine((v) => v.pin === v.confirmPin, {
+    message: 'Both PINs must match',
+    path: ['confirmPin'],
+  });
+export type SignupForm = z.infer<typeof signupSchema>;
+
+/**
+ * Email: optional everywhere it appears. Checked for shape only - the spec
+ * asks for basic validation, not a verification mail, so a well-formed address
+ * is accepted without proving it exists.
+ */
+export const emailOptional = z
+  .string()
+  .trim()
+  .optional()
+  .or(z.literal(''))
+  .refine((v) => !v || z.string().email().safeParse(v).success, 'Enter a valid email address')
+  .refine((v) => !v || v.length <= 120, 'Email can be at most 120 characters');
+
+/**
+ * The Profile screen.
+ *
+ * `phone` is validated but not editable: it is the sign-in credential, owned
+ * by Supabase auth, so changing it locally would leave the user signing in
+ * with a number their profile no longer shows. It is still in the schema so a
+ * malformed stored number surfaces rather than being saved on untouched.
+ */
+export const profileSchema = z.object({
+  name: nameField(50),
+  phone: phoneRequired,
+  email: emailOptional,
+  address: z
+    .string()
+    .trim()
+    .max(120, 'Address can be at most 120 characters')
+    .optional()
+    .or(z.literal('')),
+});
+export type ProfileForm = z.infer<typeof profileSchema>;
+
+/** Forgot-PIN step one: just the number the code is sent to. */
+export const phoneOnlySchema = z.object({ phone: phoneRequired });
+export type PhoneOnlyForm = z.infer<typeof phoneOnlySchema>;
+
+/** Forgot-PIN step three: the new PIN, typed twice like at signup. */
+export const pinResetSchema = z
+  .object({ pin: pinField, confirmPin: pinField })
+  .refine((v) => v.pin === v.confirmPin, {
+    message: 'Both PINs must match',
+    path: ['confirmPin'],
+  });
+export type PinResetForm = z.infer<typeof pinResetSchema>;
+
+/** The SMS confirmation code Supabase sends at signup. */
+export const otpSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code from the SMS'),
+});
+export type OtpForm = z.infer<typeof otpSchema>;
 
 /** New Saathi / Employee entry form. */
 export const employeeSchema = z
@@ -203,4 +274,8 @@ export type AutoHajariForm = z.infer<typeof autoHajariSchema>;
 export const sanitizePhone = (raw: string): string => raw.replace(/\D/g, '').slice(0, 10);
 /** Blocks disallowed characters while typing a name. */
 export const sanitizeName = (raw: string): string => raw.replace(/[^A-Za-z .]/g, '').slice(0, 50);
+/** PIN and OTP inputs: digits only, 6 at most. */
+export const sanitizePin = (raw: string): string => raw.replace(/\D/g, '').slice(0, 6);
+/** Trims stray spaces while typing an email; case is left to the user. */
+export const sanitizeEmail = (raw: string): string => raw.replace(/\s/g, '').slice(0, 120);
 export const sanitizeAmount = (raw: string): string => raw.replace(/\D/g, '').slice(0, 7);
