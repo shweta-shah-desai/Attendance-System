@@ -51,10 +51,17 @@ begin
   update public.employees
      set name = '__verify2__', updated_at = '2000-01-01'::timestamptz
    where id = v_emp;
-  if (select updated_at from public.employees where id = v_emp) > v_before then
-    raise notice 'OK — trigger overrode the client-supplied updated_at.';
-  else
+  -- Assert the forged value did not survive, NOT that updated_at advanced:
+  -- now() is the transaction timestamp, so the insert above and this update
+  -- stamp the identical value and `> v_before` is false however correct the
+  -- trigger is. Whether the client's '2000-01-01' stuck is the real test.
+  if (select updated_at from public.employees where id = v_emp)
+       = '2000-01-01'::timestamptz then
     raise warning 'FAIL — client was able to set updated_at.';
+  elsif (select updated_at from public.employees where id = v_emp) < v_before then
+    raise warning 'FAIL — updated_at moved backwards.';
+  else
+    raise notice 'OK — trigger overrode the client-supplied updated_at.';
   end if;
   delete from public.employees where id = v_emp;
 end $$;
